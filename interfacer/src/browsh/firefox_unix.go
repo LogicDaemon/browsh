@@ -3,6 +3,7 @@
 package browsh
 
 import (
+	"os/exec"
 	"strings"
 
 	"github.com/go-errors/errors"
@@ -22,3 +23,7 @@ func ensureFirefoxVersion(path string) {
 		Shutdown(errors.New(message))
 	}
 }
+
+func osProcessConfig(cmd *exec.Cmd) {}
+
+func osProcessTracker(cmd *exec.Cmd) {}

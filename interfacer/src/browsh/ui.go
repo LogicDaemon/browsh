@@ -27,7 +27,7 @@ func renderUI() {
 // the browser that must be done through the webextension.
 func writeString(x, y int, str string, style tcell.Style) {
 	xOriginal := x
-	if viper.GetBool("http-server-mode") {
+	if viper.GetBool("http-server-mode") || viper.GetBool("dump") {
 		slog.Info(str)
 		return
 	}
@@ -43,6 +43,9 @@ func writeString(x, y int, str string, style tcell.Style) {
 }
 
 func fillLineToEnd(x, y int) {
+	if viper.GetBool("http-server-mode") || viper.GetBool("dump") {
+		return
+	}
 	width, _ := screen.Size()
 	for i := x; i < width-1; i++ {
 		writeString(i, y, " ", tcell.StyleDefault)

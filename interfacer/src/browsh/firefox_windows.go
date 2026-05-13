@@ -5,9 +5,12 @@ package browsh
 import (
 	"fmt"
 	"log/slog"
+	"os/exec"
 	"strings"
+	"unsafe"
 
 	"github.com/go-errors/errors"
+	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
 )
 
@@ -104,5 +107,46 @@ func ensureFirefoxVersion(path string) {
 		message := "Installed Firefox version " + version + " is too old. " +
 			"Firefox 57 or newer is needed."
 		Shutdown(errors.New(message))
+	}
+}
+
+var jobHandle windows.Handle
+
+func osProcessConfig(cmd *exec.Cmd) {}
+
+func osProcessTracker(cmd *exec.Cmd) {
+	if jobHandle == 0 {
+		handle, err := windows.CreateJobObject(nil, nil)
+		if err == nil {
+			info := windows.JOBOBJECT_EXTENDED_LIMIT_INFORMATION{
+				BasicLimitInformation: windows.JOBOBJECT_BASIC_LIMIT_INFORMATION{
+					LimitFlags: windows.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+				},
+			}
+			_, err = windows.SetInformationJobObject(
+				handle,
+				windows.JobObjectExtendedLimitInformation,
+				uintptr(unsafe.Pointer(&info)),
+				uint32(unsafe.Sizeof(info)))
+			if err == nil {
+				jobHandle = handle
+			} else {
+				slog.Error("SetInformationJobObject error", "error", err)
+			}
+		} else {
+			slog.Error("CreateJobObject error", "error", err)
+		}
+	}
+	if jobHandle != 0 && cmd.Process != nil {
+		procHandle, err := windows.OpenProcess(windows.PROCESS_SET_QUOTA|windows.PROCESS_TERMINATE, false, uint32(cmd.Process.Pid))
+		if err == nil {
+			err = windows.AssignProcessToJobObject(jobHandle, procHandle)
+			windows.CloseHandle(procHandle)
+			if err != nil {
+				slog.Error("AssignProcessToJobObject error", "error", err)
+			}
+		} else {
+			slog.Error("OpenProcess error", "error", err)
+		}
 	}
 }

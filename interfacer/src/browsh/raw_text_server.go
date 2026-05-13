@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -288,4 +289,60 @@ func getTotalTiming(startString string) string {
 	start, _ := time.Parse(time.RFC3339, startString)
 	elapsed := time.Since(start) / time.Millisecond
 	return fmt.Sprintf("%d", elapsed)
+}
+
+func DumpStart() {
+	viper.Set("http-server-mode", true)
+	IsHTTPServerMode = true // Trick it to behave like HTTP server to accept /raw_text
+	StartFirefox()
+	go startWebSocketServer()
+	slog.Info("Starting Browsh dump mode")
+
+	urlForBrowsh := viper.GetString("startup-url")
+	validURL := viper.GetStringSlice("validURL")
+	if len(validURL) > 0 {
+		urlForBrowsh = validURL[0]
+	}
+
+	rawTextRequestID := pseudoUUID()
+	rawTextRequests.store(rawTextRequestID+"-start", time.Now().Format(time.RFC3339))
+	mode := "PLAIN"
+
+	// Wait for connection to WebExtension
+	maxConnWait := time.Duration(15) * time.Second
+	startConn := time.Now()
+	for !IsConnectedToWebExtension {
+		if time.Since(startConn) > maxConnWait {
+			fmt.Println("Timeout waiting for WebExtension")
+			os.Exit(1)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	sendMessageToWebExtension("/tty_size,120,30")
+	sendMessageToWebExtension(
+		"/raw_text_request," + rawTextRequestID + "," +
+			mode + "," +
+			urlForBrowsh)
+
+	var rawTextRequestResponse string
+	var ok bool
+	isSent := false
+	maxTime := time.Duration(30) * time.Second
+	start := time.Now()
+	for time.Since(start) < maxTime {
+		if rawTextRequestResponse, ok = rawTextRequests.load(rawTextRequestID); ok {
+			jsonResponse := unpackResponse(rawTextRequestResponse)
+			fmt.Print(jsonResponse.Text)
+			isSent = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	rawTextRequests.remove(rawTextRequestID)
+	if !isSent {
+		fmt.Println("Browsh rendering aborted due to timeout.")
+		os.Exit(1)
+	}
+	os.Exit(0)
 }

@@ -79,6 +79,7 @@ func startHeadlessFirefox() {
 	}
 	firefoxProcess := exec.Command(firefoxPath, args...)
 	defer firefoxProcess.Process.Kill()
+	osProcessConfig(firefoxProcess)
 	stdout, err := firefoxProcess.StdoutPipe()
 	if err != nil {
 		Shutdown(err)
@@ -86,6 +87,7 @@ func startHeadlessFirefox() {
 	if err := firefoxProcess.Start(); err != nil {
 		Shutdown(err)
 	}
+	osProcessTracker(firefoxProcess)
 	in := bufio.NewScanner(stdout)
 	for in.Scan() {
 		slog.Info("FF-CONSOLE", "stdout", in.Text())
@@ -323,9 +325,13 @@ func setupFirefox() {
 
 func StartFirefox() {
 	if !viper.GetBool("firefox.use-existing") {
-		writeString(0, 16, "Waiting for Firefox to connect...", tcell.StyleDefault)
+		if !viper.GetBool("dump") {
+			writeString(0, 16, "Waiting for Firefox to connect...", tcell.StyleDefault)
+		}
 		if IsTesting {
-			writeString(0, 17, "TEST MODE", tcell.StyleDefault)
+			if !viper.GetBool("dump") {
+				writeString(0, 17, "TEST MODE", tcell.StyleDefault)
+			}
 			go startWERFirefox()
 			firefoxMarionette()
 		} else {
@@ -333,7 +339,9 @@ func StartFirefox() {
 		}
 	} else {
 		firefoxMarionette()
-		writeString(0, 16, "Waiting for a user-initiated Firefox instance to connect...", tcell.StyleDefault)
+		if !viper.GetBool("dump") {
+			writeString(0, 16, "Waiting for a user-initiated Firefox instance to connect...", tcell.StyleDefault)
+		}
 	}
 }
 

@@ -20,6 +20,7 @@ var (
 	timeLimit = pflag.Int("time-limit", 0, "Kill Browsh after the specified number of seconds")
 	_         = pflag.Bool("http-server-mode", false, "Run as an HTTP service")
 
+	_ = pflag.Bool("dump", false, "Output page as text and exit")
 	_ = pflag.String("startup-url", "https://www.brow.sh", "URL to launch at startup")
 	_ = pflag.String("firefox.path", "firefox", "Path to Firefox executable")
 	_ = pflag.Bool("firefox.with-gui", false, "Don't use headless Firefox")

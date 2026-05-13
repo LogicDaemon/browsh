@@ -210,7 +210,9 @@ func MainEntry() {
 	}
 
 	// Decide whether to run in http-server-mode or CLI app
-	if viper.GetBool("http-server-mode") {
+	if viper.GetBool("dump") {
+		DumpStart()
+	} else if viper.GetBool("http-server-mode") {
 		HTTPServerStart()
 	} else {
 		ttyEntry()

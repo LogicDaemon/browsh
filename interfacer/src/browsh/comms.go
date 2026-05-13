@@ -71,7 +71,7 @@ func webSocketReader(ws *websocket.Conn) {
 func handleWebextensionCommand(message []byte) {
 	parts := strings.Split(string(message), ",")
 	command := parts[0]
-	if viper.GetBool("http-server-mode") {
+	if viper.GetBool("http-server-mode") || viper.GetBool("dump") {
 		handleRawFrameTextCommands(parts)
 		return
 	}
@@ -153,7 +153,7 @@ func webSocketServer(w http.ResponseWriter, r *http.Request) {
 	go webSocketReader(ws)
 	sendConfigToWebExtension()
 	setDefaultFirefoxPreferences()
-	if !viper.GetBool("http-server-mode") {
+	if !viper.GetBool("http-server-mode") && !viper.GetBool("dump") {
 		sendTtySize()
 	}
 	// For some reason, using Firefox's CLI arg `--url https://google.com` doesn't consistently
