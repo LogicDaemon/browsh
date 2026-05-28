@@ -68,6 +68,31 @@ type mcpMouseActionResult struct {
 	Error      string `json:"error,omitempty"`
 }
 
+func getMCPOpenTabsList() string {
+	// Clean up stale entries from tabsOrder
+	validOrder := tabsOrder[:0]
+	for _, id := range tabsOrder {
+		if _, ok := Tabs[id]; ok {
+			validOrder = append(validOrder, id)
+		}
+	}
+	tabsOrder = validOrder
+
+	tabsInfo := ""
+	for _, id := range tabsOrder {
+		t := Tabs[id]
+		activeStr := ""
+		if CurrentTab != nil && CurrentTab.ID == id {
+			activeStr = " (Active)"
+		}
+		tabsInfo += fmt.Sprintf("ID: %d%s\nTitle: %s\nURL: %s\n\n", id, activeStr, t.Title, t.URI)
+	}
+	if tabsInfo == "" {
+		tabsInfo = "No open tabs."
+	}
+	return strings.TrimSpace(tabsInfo)
+}
+
 func handleMCPRequest(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -393,60 +418,37 @@ func handleMCPRequest(w http.ResponseWriter, r *http.Request) {
 
 		if params.Name == "close" {
 			mcpCachedText = ""
-			if len(tabsOrder) <= 1 {
-				sendMessageToWebExtension("/new_tab,about:blank")
-				if CurrentTab != nil {
-					removeTab(CurrentTab.ID)
-				}
-				sendMCPResponse(w, req.ID, map[string]interface{}{
-					"content": []map[string]interface{}{
-						{
-							"type": "text",
-							"text": "Closed last tab and opened a new empty tab.",
-						},
-					},
-				})
-			} else if CurrentTab != nil {
-				removeTab(CurrentTab.ID)
-				sendMCPResponse(w, req.ID, map[string]interface{}{
-					"content": []map[string]interface{}{
-						{
-							"type": "text",
-							"text": "Closed current tab",
-						},
-					},
-				})
+			statusMsg := ""
+			
+			currentTabID := -1
+			if CurrentTab != nil {
+				currentTabID = CurrentTab.ID
+			}
+			
+			if currentTabID != -1 {
+				removeTab(currentTabID)
+				statusMsg = "Closed current tab."
 			} else {
-				sendMCPResponse(w, req.ID, map[string]interface{}{
-					"content": []map[string]interface{}{
-						{
-							"type": "text",
-							"text": "No active tab to close",
-						},
-					},
-				})
+				statusMsg = "No active tab to close."
 			}
-			return
-		}
-
-		if params.Name == "list_tabs" {
-			tabsInfo := ""
-			for _, id := range tabsOrder {
-				t := Tabs[id]
-				activeStr := ""
-				if CurrentTab != nil && CurrentTab.ID == id {
-					activeStr = " (Active)"
-				}
-				tabsInfo += fmt.Sprintf("ID: %d%s\nTitle: %s\nURL: %s\n\n", id, activeStr, t.Title, t.URI)
-			}
-			if tabsInfo == "" {
-				tabsInfo = "No open tabs."
-			}
+			
 			sendMCPResponse(w, req.ID, map[string]interface{}{
 				"content": []map[string]interface{}{
 					{
 						"type": "text",
-						"text": tabsInfo,
+						"text": fmt.Sprintf("%s\n\n%s", statusMsg, getMCPOpenTabsList()),
+					},
+				},
+			})
+			return
+		}
+
+		if params.Name == "list_tabs" {
+			sendMCPResponse(w, req.ID, map[string]interface{}{
+				"content": []map[string]interface{}{
+					{
+						"type": "text",
+						"text": getMCPOpenTabsList(),
 					},
 				},
 			})
@@ -478,7 +480,7 @@ func handleMCPRequest(w http.ResponseWriter, r *http.Request) {
 				"content": []map[string]interface{}{
 					{
 						"type": "text",
-						"text": fmt.Sprintf("Switched to tab %d", id),
+						"text": fmt.Sprintf("Switched to tab %d\n\n%s", id, getMCPOpenTabsList()),
 					},
 				},
 			})

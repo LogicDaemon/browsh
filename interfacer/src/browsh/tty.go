@@ -228,6 +228,9 @@ func handleTTYResize() {
 // will try to minimise rendering commands by only rendering parts of the terminal
 // that have changed.
 func renderCurrentTabWindow() {
+	if screen == nil {
+		return
+	}
 	var currentCell cell
 	styling := tcell.StyleDefault
 	var runeChars []rune

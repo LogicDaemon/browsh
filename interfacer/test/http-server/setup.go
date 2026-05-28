@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"runtime"
 	"time"
 
 	"github.com/browsh-org/browsh/interfacer/src/browsh"
@@ -72,7 +73,13 @@ func getPath(path string, mode string) string {
 
 func stopFirefox() {
 	browsh.IsConnectedToWebExtension = false
-	browsh.Shell(rootDir + "/webext/contrib/firefoxheadless.sh kill")
+	if runtime.GOOS == "windows" {
+		// On Windows, Firefox subprocesses are attached to a Job Object
+		// (JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE) upon creation, so the OS
+		// cleans them up automatically when the test suite process exits.
+	} else {
+		browsh.Shell(rootDir + "/webext/contrib/firefoxheadless.sh kill")
+	}
 	time.Sleep(500 * time.Millisecond)
 }
 

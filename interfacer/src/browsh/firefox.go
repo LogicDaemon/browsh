@@ -328,13 +328,16 @@ func StartFirefox() {
 		if !viper.GetBool("dump") {
 			writeString(0, 16, "Waiting for Firefox to connect...", tcell.StyleDefault)
 		}
-		if IsTesting {
+		if IsTesting && runtime.GOOS != "windows" {
 			if !viper.GetBool("dump") {
 				writeString(0, 17, "TEST MODE", tcell.StyleDefault)
 			}
 			go startWERFirefox()
 			firefoxMarionette()
 		} else {
+			if IsTesting && !viper.GetBool("dump") {
+				writeString(0, 17, "TEST MODE (NATIVE)", tcell.StyleDefault)
+			}
 			setupFirefox()
 		}
 	} else {

@@ -18,6 +18,9 @@ var urlInputBox = inputBox{
 
 // Render tabs, URL bar, status messages, etc
 func renderUI() {
+	if screen == nil {
+		return
+	}
 	renderTabs()
 	renderURLBar()
 }

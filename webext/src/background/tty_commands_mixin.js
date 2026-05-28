@@ -119,11 +119,14 @@ export default (MixinBase) =>
       const is_straddled_dot = RegExp(/^[^\s]+\.[^\s]+/);
       // More comprehensive URL pattern
       const is_url = RegExp(/\/\/\w+(\.\w+)*(:[0-9]+)?\/?(\/[.\w]*)*$/);
-      if (is_straddled_dot.test(input) || is_url.test(input)) {
+      const has_known_protocol = RegExp(/^(https?|about|file|view-source|chrome|moz-extension|edge):/i);
+
+      if (has_known_protocol.test(input)) {
         url = input;
-        if (!url.startsWith("http")) {
-          url = "http://" + url;
-        }
+      } else if (input === "localhost" || input.startsWith("localhost:")) {
+        url = "http://" + input;
+      } else if (is_straddled_dot.test(input) || is_url.test(input)) {
+        url = "http://" + input;
       } else {
         url = `${search_engine}${input}`;
       }

@@ -41,6 +41,7 @@ func ResetTabs() {
 func ensureTabExists(id int) {
 	if _, ok := Tabs[id]; !ok {
 		newTab(id)
+		
 		if isNewEmptyTabActive() {
 			removeTab(-1)
 		}
@@ -64,12 +65,8 @@ func newTab(id int) {
 }
 
 func removeTab(id int) {
-	if len(Tabs) == 1 {
-		if viper.GetBool("http-server-mode") {
-			// Don't quit in http-server-mode, we want the server to stay alive
-		} else {
-			quitBrowsh()
-		}
+	if len(Tabs) == 1 && !viper.GetBool("http-server-mode") {
+		quitBrowsh()
 	}
 	tabsDeleted = append(tabsDeleted, id)
 	sendMessageToWebExtension(fmt.Sprintf("/remove_tab,%d", id))
@@ -83,9 +80,26 @@ func removeTab(id int) {
 	removeTabIDfromTabsOrder(id)
 	delete(Tabs, id)
 
-	if CurrentTab != nil {
+	if CurrentTab != nil && screen != nil {
 		renderUI()
 		renderCurrentTabWindow()
+	}
+}
+
+func nextTab() {
+	for i := 0; i < len(tabsOrder); i++ {
+		if CurrentTab != nil && tabsOrder[i] == CurrentTab.ID {
+			if i+1 == len(tabsOrder) {
+				i = 0
+			} else {
+				i++
+			}
+			sendMessageToWebExtension(fmt.Sprintf("/switch_to_tab,%d", tabsOrder[i]))
+			CurrentTab = Tabs[tabsOrder[i]]
+			renderUI()
+			renderCurrentTabWindow()
+			return
+		}
 	}
 }
 
@@ -108,12 +122,14 @@ func createNewEmptyTab() {
 		return
 	}
 	newTab(-1)
+	
 	tab := Tabs[-1]
 	tab.Title = "New Tab"
 	tab.URI = ""
 	tab.Active = true
 	CurrentTab = tab
 	CurrentTab.frame.resetCells()
+	
 	renderUI()
 	urlBarFocus(true)
 	renderCurrentTabWindow()
@@ -121,23 +137,6 @@ func createNewEmptyTab() {
 
 func isNewEmptyTabActive() bool {
 	return isTabPresent(-1)
-}
-
-func nextTab() {
-	for i := 0; i < len(tabsOrder); i++ {
-		if tabsOrder[i] == CurrentTab.ID {
-			if i+1 == len(tabsOrder) {
-				i = 0
-			} else {
-				i++
-			}
-			sendMessageToWebExtension(fmt.Sprintf("/switch_to_tab,%d", tabsOrder[i]))
-			CurrentTab = Tabs[tabsOrder[i]]
-			renderUI()
-			renderCurrentTabWindow()
-			break
-		}
-	}
 }
 
 func isTabPreviouslyDeleted(id int) bool {
@@ -158,7 +157,9 @@ func parseJSONTabState(jsonString string) {
 	if isTabPreviouslyDeleted(incoming.ID) {
 		return
 	}
+	
 	ensureTabExists(incoming.ID)
+
 	if incoming.Active && !isNewEmptyTabActive() {
 		CurrentTab = Tabs[incoming.ID]
 	}
