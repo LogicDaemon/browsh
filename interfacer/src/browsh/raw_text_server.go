@@ -69,13 +69,14 @@ type rawTextResponse struct {
 // `Something                                                                    `
 func HTTPServerStart() {
 	IsHTTPServerMode = true
+	startWebSocketServerAsync()
 	StartFirefox()
-	go startWebSocketServer()
 	slog.Info("Starting Browsh HTTP server")
 	bind := viper.GetString("http-server.bind")
 	port := viper.GetString("http-server.port")
 	serverMux := http.NewServeMux()
 	uncompressed := http.HandlerFunc(handleHTTPServerRequest)
+	serverMux.HandleFunc("/mcp", handleMCPRequest)
 	limiterMiddleware := setupRateLimiter()
 	serverMux.Handle("/", limiterMiddleware.Handler(gziphandler.GzipHandler(uncompressed)))
 	if err := http.ListenAndServe(bind+":"+port, &slashFix{serverMux}); err != nil {
@@ -171,10 +172,14 @@ func handleHTTPServerRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	rawTextRequestID := pseudoUUID()
 	rawTextRequests.store(rawTextRequestID+"-start", start)
+	if err := waitForWebExtensionConnection(15 * time.Second); err != nil {
+		io.WriteString(w, err.Error())
+		return
+	}
 	mode := getRawTextMode(r)
 	sendMessageToWebExtension(
 		"/raw_text_request," + rawTextRequestID + "," +
-			mode + "," +
+			mode + ",false," +
 			urlForBrowsh)
 	waitForResponse(rawTextRequestID, w)
 }
@@ -294,8 +299,8 @@ func getTotalTiming(startString string) string {
 func DumpStart() {
 	viper.Set("http-server-mode", true)
 	IsHTTPServerMode = true // Trick it to behave like HTTP server to accept /raw_text
+	startWebSocketServerAsync()
 	StartFirefox()
-	go startWebSocketServer()
 	slog.Info("Starting Browsh dump mode")
 
 	urlForBrowsh := viper.GetString("startup-url")
@@ -308,21 +313,15 @@ func DumpStart() {
 	rawTextRequests.store(rawTextRequestID+"-start", time.Now().Format(time.RFC3339))
 	mode := "PLAIN"
 
-	// Wait for connection to WebExtension
-	maxConnWait := time.Duration(15) * time.Second
-	startConn := time.Now()
-	for !IsConnectedToWebExtension {
-		if time.Since(startConn) > maxConnWait {
-			fmt.Println("Timeout waiting for WebExtension")
-			os.Exit(1)
-		}
-		time.Sleep(100 * time.Millisecond)
+	if err := waitForWebExtensionConnection(15 * time.Second); err != nil {
+		fmt.Println(err.Error())
+		os.Exit(1)
 	}
 
 	sendMessageToWebExtension("/tty_size,120,30")
 	sendMessageToWebExtension(
 		"/raw_text_request," + rawTextRequestID + "," +
-			mode + "," +
+			mode + ",false," +
 			urlForBrowsh)
 
 	var rawTextRequestResponse string

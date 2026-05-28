@@ -57,11 +57,13 @@ export default (MixinBase) =>
         };
         this.sendToTerminal(`/raw_text,${JSON.stringify(payload)}`);
       }
-      this._tabCount((count) => {
-        if (count > 1) {
-          this.remove();
-        }
-      });
+      if (!this.keep_open) {
+        this._tabCount((count) => {
+          if (count > 1) {
+            this.remove();
+          }
+        });
+      }
     }
 
     _tabCount(callback) {

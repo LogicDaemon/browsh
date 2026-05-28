@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-errors/errors"
 	"github.com/gorilla/websocket"
@@ -31,10 +33,37 @@ func startWebSocketServer() {
 	serverMux := http.NewServeMux()
 	serverMux.HandleFunc("/", webSocketServer)
 	port := viper.GetString("browsh.websocket-port")
-	slog.Info("Starting websocket server...")
+	slog.Info("Starting websocket server...", "port", port)
 	if netErr := http.ListenAndServe(":"+port, serverMux); netErr != nil {
 		Shutdown(fmt.Errorf("Error starting websocket server: %w", netErr))
 	}
+}
+
+func startWebSocketServerAsync() {
+	serverMux := http.NewServeMux()
+	serverMux.HandleFunc("/", webSocketServer)
+	port := viper.GetString("browsh.websocket-port")
+	listener, err := net.Listen("tcp", ":"+port)
+	if err != nil {
+		Shutdown(fmt.Errorf("Error starting websocket server: %w", err))
+	}
+	slog.Info("Starting websocket server...", "port", port)
+	go func() {
+		if netErr := http.Serve(listener, serverMux); netErr != nil {
+			Shutdown(fmt.Errorf("Error starting websocket server: %w", netErr))
+		}
+	}()
+}
+
+func waitForWebExtensionConnection(timeout time.Duration) error {
+	start := time.Now()
+	for !IsConnectedToWebExtension {
+		if time.Since(start) > timeout {
+			return fmt.Errorf("timeout waiting for WebExtension to connect")
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return nil
 }
 
 func sendMessageToWebExtension(message string) {
@@ -143,12 +172,14 @@ func webSocketWriter(ws *websocket.Conn) {
 }
 
 func webSocketServer(w http.ResponseWriter, r *http.Request) {
-	slog.Info("Incoming web request from browser")
+	slog.Info("Incoming web request from browser", "remote", r.RemoteAddr, "user_agent", r.UserAgent())
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		Shutdown(err)
+		slog.Error("websocket upgrade failed", "error", err)
+		return
 	}
 	IsConnectedToWebExtension = true
+	slog.Info("Webextension websocket connected")
 	go webSocketWriter(ws)
 	go webSocketReader(ws)
 	sendConfigToWebExtension()

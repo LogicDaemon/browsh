@@ -33,7 +33,14 @@ export default (MixinBase) =>
           this.removeTab(parts.slice(1).join(","));
           break;
         case "/raw_text_request":
-          this._rawTextRequest(parts[1], parts[2], parts.slice(3).join(","));
+          this._rawTextRequest(parts[1], parts[2], parts[3], parts.slice(4).join(","));
+          break;
+        case "/raw_text_current_tab":
+          if (this.currentTab()) {
+            this.currentTab().request_id = parts[1];
+            this.currentTab().keep_open = true; // Never close the current tab automatically here
+            this.sendToCurrentTab(`/request_raw_text,${parts[2]}`);
+          }
           break;
       }
     }
@@ -191,18 +198,19 @@ export default (MixinBase) =>
       this.sendToTerminal("/screenshot," + data);
     }
 
-    _rawTextRequest(request_id, mode, url) {
+    _rawTextRequest(request_id, mode, keep_open, url) {
       this.createNewTab(url, (native_tab) => {
         this._acknowledgeNewTab({
           id: native_tab.id,
           request_id: request_id,
           raw_text_mode_type: mode.toLowerCase(),
+          keep_open: keep_open === "true",
           start_time: Date.now(),
         });
         // Sometimes tabs fail to load for whatever reason. Make sure they get
         // removed to save RAM in long-lived Browsh HTTP servers
         setTimeout(() => {
-          if (this.tabs[native_tab.id]) {
+          if (this.tabs[native_tab.id] && !this.tabs[native_tab.id].keep_open) {
             this.removeTab(native_tab.id);
           }
         }, 60000);

@@ -11,6 +11,7 @@ import Dimensions from "background/dimensions";
 export default class extends utils.mixins(CommonMixin, TTYCommandsMixin) {
   constructor() {
     super();
+    console.log("Browsh background manager starting");
     this.dimensions = new Dimensions();
     // All of the tabs open in the real browser
     this.tabs = {};
@@ -38,14 +39,22 @@ export default class extends utils.mixins(CommonMixin, TTYCommandsMixin) {
 
   _connectToTerminal() {
     // This is the websocket server run by the CLI client
-    this.terminal = new WebSocket("ws://localhost:3334");
+    console.log("Browsh background connecting to terminal websocket");
+    // Use IPv4 explicitly because localhost can resolve to IPv6 first here,
+    // while Browsh's websocket path has been more reliable on 127.0.0.1.
+    this.terminal = new WebSocket("ws://127.0.0.1:3334");
     this.terminal.addEventListener("open", (_event) => {
+      console.log("Browsh background connected to terminal websocket");
       this.log("Webextension connected to the terminal's websocket server");
       this.dimensions.terminal = this.terminal;
       this._listenForTerminalMessages();
       this._connectToBrowserDOM();
     });
+    this.terminal.addEventListener("error", (event) => {
+      console.error("Browsh background websocket error", event);
+    });
     this.terminal.addEventListener("close", (_event) => {
+      console.warn("Browsh background websocket closed");
       this._reconnectToTerminal();
     });
   }
@@ -166,6 +175,7 @@ export default class extends utils.mixins(CommonMixin, TTYCommandsMixin) {
       "active",
       "request_id",
       "raw_text_mode_type",
+      "keep_open",
       "start_time",
     ].map((key) => {
       if (tabish_object.hasOwnProperty(key)) {

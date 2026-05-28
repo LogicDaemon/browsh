@@ -11,6 +11,14 @@ export default (MixinBase) =>
           config = JSON.parse(utils.rebuildArgsToSingleArg(parts));
           this._loadConfig(config);
           break;
+        case "/request_raw_text":
+          if (parts[1]) {
+            this._raw_mode_type = "raw_text_" + parts[1].toLowerCase();
+          } else if (!this._raw_mode_type) {
+            this._raw_mode_type = "raw_text_plain";
+          }
+          this.sendRawText();
+          break;
         case "/request_frame":
           this.sendFrame();
           break;
