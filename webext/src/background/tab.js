@@ -12,6 +12,7 @@ export default class extends utils.mixins(CommonMixin, TabCommandsMixin) {
     this._max_number_of_tab_recovery_reloads = 3;
     // Type of raw text mode; HTML or plain
     this.raw_text_mode_type = "";
+    this.security_status_text = "";
   }
 
   postDOMLoadInit(terminal, dimensions) {
@@ -25,6 +26,23 @@ export default class extends utils.mixins(CommonMixin, TabCommandsMixin) {
     this._sendTTYDimensions();
     this._listenForMessages();
     this.sendGlobalConfig(config);
+    this.sendPageMetadata();
+  }
+
+  updateSecurityStatus(securityStatusText = "") {
+    this.security_status_text = securityStatusText;
+    this.sendPageMetadata();
+  }
+
+  sendPageMetadata() {
+    if (!this.channel) {
+      return;
+    }
+    this.channel.postMessage(
+      `/page_metadata,${JSON.stringify({
+        security_status_text: this.security_status_text,
+      })}`
+    );
   }
 
   _calculateMode() {

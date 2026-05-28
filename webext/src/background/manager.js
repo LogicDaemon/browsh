@@ -298,8 +298,10 @@ export default class extends utils.mixins(CommonMixin, TTYCommandsMixin) {
         let message;
         if (e.type == "main_frame") {
           message = `Loading ${e.url}`;
-          if (this.currentTab() !== undefined) {
-            this.currentTab().updateStatus("info", message);
+          const tab = this._tabForRequest(e.tabId);
+          if (tab) {
+            tab.updateStatus("info", message);
+            tab.updateSecurityStatus("");
           }
         }
       },
@@ -308,5 +310,112 @@ export default class extends utils.mixins(CommonMixin, TTYCommandsMixin) {
       },
       ["blocking"]
     );
+
+    browser.webRequest.onHeadersReceived.addListener(
+      (details) => {
+        if (details.type != "main_frame") {
+          return;
+        }
+        browser.webRequest
+          .getSecurityInfo(details.requestId, {
+            certificateChain: true,
+          })
+          .then((securityInfo) => {
+            this._updateTabSecurityStatus(details.tabId, details.url, securityInfo);
+          })
+          .catch(() => {
+            this._updateTabSecurityStatus(details.tabId, details.url, null);
+          });
+      },
+      {
+        urls: ["*://*/*"],
+      },
+      ["blocking"]
+    );
+  }
+
+  _tabForRequest(tabId) {
+    if (typeof tabId !== "number" || tabId < 0) {
+      return null;
+    }
+    return this.tabs[tabId] || this._maybeNewTab({ id: tabId });
+  }
+
+  _updateTabSecurityStatus(tabId, url, securityInfo) {
+    const tab = this._tabForRequest(tabId);
+    if (!tab) {
+      return;
+    }
+    tab.updateSecurityStatus(this._formatSecurityStatusText(url, securityInfo));
+  }
+
+  _formatSecurityStatusText(url, securityInfo) {
+    if (!securityInfo || !securityInfo.state) {
+      return this._fallbackSecurityStatusText(url);
+    }
+    const verifier = this._securityVerifierName(securityInfo);
+    switch (securityInfo.state) {
+      case "secure":
+        return verifier
+          ? `Connection is secure, verified by ${verifier}`
+          : "Connection is secure";
+      case "weak":
+        return verifier
+          ? `Connection is weak, verified by ${verifier}`
+          : "Connection is weak";
+      case "insecure":
+        return "Connection is not secure";
+      case "broken":
+        return "Connection is broken";
+      default:
+        return this._fallbackSecurityStatusText(url);
+    }
+  }
+
+  _fallbackSecurityStatusText(url) {
+    if (typeof url === "string" && url.startsWith("http://")) {
+      return "Connection is not secure";
+    }
+    return "Connection security status is unavailable";
+  }
+
+  _securityVerifierName(securityInfo) {
+    if (!securityInfo.certificates || !securityInfo.certificates.length) {
+      return "";
+    }
+    const issuerName = this._distinguishedNameValue(
+      securityInfo.certificates[0].issuer,
+      "O"
+    );
+    if (issuerName) {
+      return issuerName;
+    }
+    const issuerCommonName = this._distinguishedNameValue(
+      securityInfo.certificates[0].issuer,
+      "CN"
+    );
+    if (issuerCommonName) {
+      return issuerCommonName;
+    }
+    const rootCertificate =
+      securityInfo.certificates[securityInfo.certificates.length - 1];
+    return (
+      this._distinguishedNameValue(rootCertificate.subject, "O") ||
+      this._distinguishedNameValue(rootCertificate.subject, "CN") ||
+      ""
+    );
+  }
+
+  _distinguishedNameValue(distinguishedName, key) {
+    if (typeof distinguishedName !== "string" || distinguishedName.length === 0) {
+      return "";
+    }
+    const match = distinguishedName.match(
+      new RegExp(`(?:^|,)\\s*${key}=([^,]+)`)
+    );
+    if (!match) {
+      return "";
+    }
+    return match[1].trim();
   }
 }

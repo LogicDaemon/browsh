@@ -231,21 +231,27 @@ func isProductionHTTP(r *http.Request) bool {
 	return false
 }
 
-// 'PLAIN' mode returns raw text without any HTML whatsoever.
-// 'HTML' mode returns some basic HTML tags for things like anchor links.
-// 'DOM' mode returns a simple dump of the DOM.
+// RawTextMode represents the type of raw text parsing requested from the web extension.
+type RawTextMode string
+
+const (
+	RawTextModePlain RawTextMode = "PLAIN"
+	RawTextModeHTML  RawTextMode = "HTML"
+	RawTextModeDOM   RawTextMode = "DOM"
+	RawTextModeMCP   RawTextMode = "MCP"
+)
 func getRawTextMode(r *http.Request) string {
-	mode := "HTML"
+	mode := RawTextModeHTML
 	if strings.Contains(r.Host, "text.") {
-		mode = "PLAIN"
+		mode = RawTextModePlain
 	}
-	if r.Header.Get("X-Browsh-Raw-Mode") == "PLAIN" {
-		mode = "PLAIN"
+	if r.Header.Get("X-Browsh-Raw-Mode") == string(RawTextModePlain) {
+		mode = RawTextModePlain
 	}
-	if r.Header.Get("X-Browsh-Raw-Mode") == "DOM" {
-		mode = "DOM"
+	if r.Header.Get("X-Browsh-Raw-Mode") == string(RawTextModeDOM) {
+		mode = RawTextModeDOM
 	}
-	return mode
+	return string(mode)
 }
 
 func waitForResponse(rawTextRequestID string, w http.ResponseWriter) {
@@ -311,7 +317,7 @@ func DumpStart() {
 
 	rawTextRequestID := pseudoUUID()
 	rawTextRequests.store(rawTextRequestID+"-start", time.Now().Format(time.RFC3339))
-	mode := "PLAIN"
+	mode := string(RawTextModePlain)
 
 	if err := waitForWebExtensionConnection(15 * time.Second); err != nil {
 		fmt.Println(err.Error())

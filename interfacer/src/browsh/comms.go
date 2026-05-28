@@ -29,6 +29,12 @@ type incomingRawText struct {
 	RawJSON   string `json:"json"`
 }
 
+type incomingMCPActionResult struct {
+	RequestID  string `json:"request_id"`
+	CursorText string `json:"cursor_text,omitempty"`
+	Error      string `json:"error,omitempty"`
+}
+
 func startWebSocketServer() {
 	serverMux := http.NewServeMux()
 	serverMux.HandleFunc("/", webSocketServer)
@@ -101,6 +107,10 @@ func handleWebextensionCommand(message []byte) {
 	parts := strings.Split(string(message), ",")
 	command := parts[0]
 	if viper.GetBool("http-server-mode") || viper.GetBool("dump") {
+		if command == "/tab_state" {
+			parseJSONTabState(strings.Join(parts[1:], ","))
+			return
+		}
 		handleRawFrameTextCommands(parts)
 		return
 	}
@@ -124,9 +134,9 @@ func handleWebextensionCommand(message []byte) {
 }
 
 func handleRawFrameTextCommands(parts []string) {
-	var incoming incomingRawText
 	command := parts[0]
 	if command == "/raw_text" {
+		var incoming incomingRawText
 		jsonBytes := []byte(strings.Join(parts[1:], ","))
 		if err := json.Unmarshal(jsonBytes, &incoming); err != nil {
 			Shutdown(err)
@@ -136,6 +146,17 @@ func handleRawFrameTextCommands(parts []string) {
 			rawTextRequests.store(incoming.RequestID, incoming.RawJSON)
 		} else {
 			slog.Info("Raw text but no associated request ID")
+		}
+	} else if command == "/mcp_action_result" {
+		var incoming incomingMCPActionResult
+		jsonBytes := []byte(strings.Join(parts[1:], ","))
+		if err := json.Unmarshal(jsonBytes, &incoming); err != nil {
+			Shutdown(err)
+		}
+		if incoming.RequestID != "" {
+			mcpActionRequests.store(incoming.RequestID, string(jsonBytes))
+		} else {
+			slog.Info("MCP action result but no associated request ID")
 		}
 	} else {
 		slog.Info("WEBEXT", "command", strings.Join(parts[0:], ","))

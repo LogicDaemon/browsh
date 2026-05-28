@@ -13,6 +13,10 @@ export default class extends utils.mixins(CommonMixin, CommandsMixin) {
   constructor() {
     super();
     this.dimensions = new Dimensions();
+    this._runtime_state = {
+      last_mouse_position: null,
+      security_status_text: "",
+    };
     // Whether the DOM has loaded
     this.is_dom_loaded = false;
     // Whether the page has finished "spinning"
@@ -38,6 +42,7 @@ export default class extends utils.mixins(CommonMixin, CommandsMixin) {
       this.graphics_builder,
       this.config
     );
+    this.text_builder.runtime_state = this._runtime_state;
   }
 
   _willHideText() {
@@ -188,20 +193,40 @@ export default class extends utils.mixins(CommonMixin, CommandsMixin) {
   }
 
   _startWindowEventListeners() {
-    window.addEventListener("DOMContentLoaded", () => {
+    const handleLoad = () => {
+      setTimeout(() => {
+        this.is_page_finished_loading = true;
+        this.config.page_load_duration = Date.now() - this.config.start_time;
+        this.log("PAGE LOADED (with 1s AJAX settling delay)");
+      }, 1000);
+    };
+
+    if (document.readyState === "complete") {
       this.is_dom_loaded = true;
-      this.log("DOM LOADED");
-      this._fixStickyElements();
-      this._willHideText();
-    });
-    window.addEventListener("load", () => {
-      this.is_page_finished_loading = true;
-      this.config.page_load_duration = Date.now() - this.config.start_time;
-      this.log("PAGE LOADED");
-    });
+      handleLoad();
+    } else {
+      window.addEventListener("DOMContentLoaded", () => {
+        this.is_dom_loaded = true;
+        this.log("DOM LOADED");
+        this._fixStickyElements();
+        this._willHideText();
+      });
+      window.addEventListener("load", handleLoad);
+    }
+
     window.addEventListener("unload", () => {
       this.sendMessage("/status,window_unload");
     });
+    window.addEventListener(
+      "mousemove",
+      (event) => {
+        this._rememberMousePositionFromDOM(
+          event.clientX + window.scrollX,
+          event.clientY + window.scrollY
+        );
+      },
+      true
+    );
     window.addEventListener("error", (error) => {
       this.logError(error);
     });

@@ -3,6 +3,8 @@ package browsh
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/spf13/viper"
 )
 
 // Tabs is a map of all tab data
@@ -63,15 +65,28 @@ func newTab(id int) {
 
 func removeTab(id int) {
 	if len(Tabs) == 1 {
-		quitBrowsh()
+		if viper.GetBool("http-server-mode") {
+			// Don't quit in http-server-mode, we want the server to stay alive
+		} else {
+			quitBrowsh()
+		}
 	}
 	tabsDeleted = append(tabsDeleted, id)
 	sendMessageToWebExtension(fmt.Sprintf("/remove_tab,%d", id))
-	nextTab()
+
+	if len(tabsOrder) > 1 {
+		nextTab()
+	} else {
+		CurrentTab = nil
+	}
+
 	removeTabIDfromTabsOrder(id)
 	delete(Tabs, id)
-	renderUI()
-	renderCurrentTabWindow()
+
+	if CurrentTab != nil {
+		renderUI()
+		renderCurrentTabWindow()
+	}
 }
 
 // A bit complicated! Just want to remove an integer from a slice whilst retaining

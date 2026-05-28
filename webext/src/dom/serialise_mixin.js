@@ -74,11 +74,17 @@ export default (MixinBase) =>
     }
 
     _getUserFooter() {
-      return "\n" + this.config["http-server"].footer;
+      const footer = this.config["http-server"]
+        ? this.config["http-server"].footer
+        : "";
+      return footer ? "\n" + footer : "";
     }
 
     _getUserHeader() {
-      return this.config["http-server"].header + "\n";
+      const header = this.config["http-server"]
+        ? this.config["http-server"].header
+        : "";
+      return header ? header + "\n" : "";
     }
 
     _getMetaData() {
@@ -122,11 +128,305 @@ export default (MixinBase) =>
       }
       return (
         start +
-        this._getMetaData() +
-        this._getDonateCall() +
+        this._getStatusFooter() +
         this._getUserFooter() +
         end
       );
+    }
+
+    _getStatusFooter() {
+      const footerLines = [];
+      if (this._raw_mode_type !== "raw_text_mcp") {
+        footerLines.push(
+          `The above is a text render of ${document.location.href}.`
+        );
+      } else {
+        footerLines.push(`URL: ${document.location.href}`);
+      }
+      footerLines.push(this._getMouseFooterLine());
+      const focusedElementFooter = this._getFocusedTextElementFooter();
+      if (focusedElementFooter) {
+        footerLines.push(focusedElementFooter.coordinates);
+        footerLines.push(`[${focusedElementFooter.text}]`);
+      }
+      const selectionFooter = this._getSelectionFooterLine();
+      if (selectionFooter) {
+        footerLines.push(selectionFooter);
+      }
+      if (this.dimensions.is_page_truncated) {
+        footerLines.push(
+          "Browsh parser: the page was too large, some text may have been truncated."
+        );
+      }
+      footerLines.push(
+        `${this._getSecurityStatusFooterLine()}, fetched ${this._getCurrentDataTime()}.`
+      );
+      return (
+        "\n\n" +
+        footerLines
+          .map((line) => this._renderFooterLine(line))
+          .join("\n")
+      );
+    }
+
+    _renderFooterLine(line) {
+      if (this._raw_mode_type !== "raw_text_html") {
+        return line;
+      }
+      return this._escapeHTML(line);
+    }
+
+    _escapeHTML(text) {
+      return String(text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    _getMouseFooterLine() {
+      const mouseState = this.runtime_state
+        ? this.runtime_state.last_mouse_position
+        : null;
+      if (!mouseState) {
+        return "Mouse cursor position is unavailable.";
+      }
+      const mouseCoordinates = this._rawTextCoordinatesFromAbsolutePosition(
+        mouseState.x,
+        mouseState.y
+      );
+      if (!mouseCoordinates) {
+        return "Mouse cursor is outside the rendered page.";
+      }
+      const hoveredText = this._textAtRawTextCoordinate(
+        mouseCoordinates.x,
+        mouseCoordinates.y
+      );
+      if (!hoveredText) {
+        return "Mouse cursor is not over visible page text.";
+      }
+      return (
+        `Mouse cursor is at x=${mouseCoordinates.x}, y=${mouseCoordinates.y} ` +
+        `over \"${this._compactText(hoveredText, 80)}\".`
+      );
+    }
+
+    _rawTextCoordinatesFromAbsolutePosition(domX, domY) {
+      if (typeof domX !== "number" || typeof domY !== "number") {
+        return null;
+      }
+      const x = utils.snap(domX * this.dimensions.scale_factor.width);
+      const y = utils.snap(
+        (domY * this.dimensions.scale_factor.height) / 2
+      );
+      if (
+        x < 0 ||
+        y < 0 ||
+        x >= this.dimensions.frame.width ||
+        y >= this.dimensions.frame.height / 2
+      ) {
+        return null;
+      }
+      return { x, y };
+    }
+
+    _textAtRawTextCoordinate(x, y) {
+      const index = y * this.dimensions.frame.width + x;
+      const cell = this.tty_grid.cells[index];
+      if (!cell || !cell.rune || !cell.rune.trim()) {
+        return "";
+      }
+      let start = x;
+      let end = x;
+      while (start > 0) {
+        const previousCell = this.tty_grid.cells[y * this.dimensions.frame.width + start - 1];
+        if (!previousCell || !previousCell.rune || !previousCell.rune.trim()) {
+          break;
+        }
+        start--;
+      }
+      while (end + 1 < this.dimensions.frame.width) {
+        const nextCell = this.tty_grid.cells[y * this.dimensions.frame.width + end + 1];
+        if (!nextCell || !nextCell.rune || !nextCell.rune.trim()) {
+          break;
+        }
+        end++;
+      }
+      let text = "";
+      for (let i = start; i <= end; i++) {
+        const lineCell = this.tty_grid.cells[y * this.dimensions.frame.width + i];
+        text += lineCell && lineCell.rune ? lineCell.rune : " ";
+      }
+      return text.trim();
+    }
+
+    _getFocusedTextElementFooter() {
+      const element = document.activeElement;
+      if (!this._isFocusedTextElement(element)) {
+        return null;
+      }
+      const cursorText = this._focusedTextWithCursor(element);
+      if (!cursorText) {
+        return null;
+      }
+      const coordinates = this._rawTextCoordinatesFromElement(element);
+      if (!coordinates) {
+        return null;
+      }
+      return {
+        coordinates: `Focused text element is at x=${coordinates.x}, y=${coordinates.y}.`,
+        text: cursorText,
+      };
+    }
+
+    _isFocusedTextElement(element) {
+      if (!element || element.disabled || element.readOnly) {
+        return false;
+      }
+      if (element.isContentEditable || element.getAttribute("role") == "textbox") {
+        return true;
+      }
+      if (element.tagName === "TEXTAREA") {
+        return true;
+      }
+      if (element.tagName !== "INPUT") {
+        return false;
+      }
+      return ![
+        "button",
+        "checkbox",
+        "color",
+        "date",
+        "datetime-local",
+        "file",
+        "hidden",
+        "image",
+        "month",
+        "radio",
+        "range",
+        "reset",
+        "submit",
+        "time",
+        "week",
+      ].includes((element.type || "text").toLowerCase());
+    }
+
+    _focusedTextWithCursor(element) {
+      if (element.tagName === "INPUT" || element.tagName === "TEXTAREA") {
+        if (
+          typeof element.selectionStart !== "number" ||
+          typeof element.selectionEnd !== "number" ||
+          element.selectionStart !== element.selectionEnd
+        ) {
+          return "";
+        }
+        return this._compactTextAroundCursor(
+          element.value || "",
+          element.selectionStart
+        );
+      }
+      if (element.isContentEditable || element.getAttribute("role") == "textbox") {
+        const selection = window.getSelection();
+        if (
+          !selection ||
+          !selection.rangeCount ||
+          !selection.isCollapsed ||
+          !element.contains(selection.anchorNode)
+        ) {
+          return "";
+        }
+        const range = selection.getRangeAt(0).cloneRange();
+        range.selectNodeContents(element);
+        range.setEnd(selection.anchorNode, selection.anchorOffset);
+        return this._compactTextAroundCursor(
+          element.textContent || "",
+          range.toString().length
+        );
+      }
+      return "";
+    }
+
+    _rawTextCoordinatesFromElement(element) {
+      const domRect = this._convertDOMRectToAbsoluteCoords(
+        element.getBoundingClientRect()
+      );
+      let top = domRect.top;
+      let left = domRect.left;
+      if (window.getComputedStyle) {
+        const styles = window.getComputedStyle(element);
+        top += parseInt(styles["padding-top"].replace("px", "")) || 0;
+        left += parseInt(styles["padding-left"].replace("px", "")) || 0;
+      }
+      return this._rawTextCoordinatesFromAbsolutePosition(left, top);
+    }
+
+    _getSelectionFooterLine() {
+      const text = this._selectedText();
+      if (!text) {
+        return "";
+      }
+      return `Selection: [${this._compactText(text, 120)}]`;
+    }
+
+    _selectedText() {
+      const element = document.activeElement;
+      if (
+        element &&
+        (element.tagName === "INPUT" || element.tagName === "TEXTAREA") &&
+        typeof element.selectionStart === "number" &&
+        typeof element.selectionEnd === "number" &&
+        element.selectionStart !== element.selectionEnd
+      ) {
+        return element.value.slice(element.selectionStart, element.selectionEnd);
+      }
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed) {
+        return "";
+      }
+      return selection.toString();
+    }
+
+    _compactTextAroundCursor(text, cursorIndex) {
+      const characters = Array.from(text || "");
+      const start = Math.max(0, cursorIndex - 40);
+      const end = Math.min(characters.length, cursorIndex + 40);
+      let snippet = characters.slice(start, cursorIndex).join("");
+      snippet += "|";
+      snippet += characters.slice(cursorIndex, end).join("");
+      snippet = this._normaliseFooterWhitespace(snippet);
+      if (start > 0) {
+        snippet = "... " + snippet;
+      }
+      if (end < characters.length) {
+        snippet += " ...";
+      }
+      return snippet;
+    }
+
+    _compactText(text, maxLength) {
+      const compactText = this._normaliseFooterWhitespace(text);
+      if (compactText.length <= maxLength) {
+        return compactText;
+      }
+      return compactText.slice(0, maxLength - 4) + " ...";
+    }
+
+    _normaliseFooterWhitespace(text) {
+      return String(text || "").replace(/\s+/g, " ").trim();
+    }
+
+    _getSecurityStatusFooterLine() {
+      if (
+        this.runtime_state &&
+        this.runtime_state.security_status_text &&
+        this.runtime_state.security_status_text.length > 0
+      ) {
+        return this.runtime_state.security_status_text;
+      }
+      if (document.location.protocol === "http:") {
+        return "Connection is not secure";
+      }
+      return "Connection security status is unavailable";
     }
 
     _getHTMLHead() {

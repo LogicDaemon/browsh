@@ -35,6 +35,11 @@ export default (MixinBase) =>
           incoming = JSON.parse(utils.rebuildArgsToSingleArg(parts));
           this._rawTextRequest(incoming);
           break;
+        case "/mcp_action_result":
+          this.sendToTerminal(
+            `/mcp_action_result,${utils.rebuildArgsToSingleArg(parts)}`
+          );
+          break;
         default:
           this.log("Unknown command from tab to background", message);
       }
