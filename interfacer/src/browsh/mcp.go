@@ -7,10 +7,13 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
 )
+
+var mcpTaskMutex sync.Mutex
 
 type mcpRequest struct {
 	JSONRPC string          `json:"jsonrpc"`
@@ -111,6 +114,9 @@ func handleMCPRequest(w http.ResponseWriter, r *http.Request) {
 		sendMCPError(w, req.ID, -32700, "Parse error")
 		return
 	}
+
+	mcpTaskMutex.Lock()
+	defer mcpTaskMutex.Unlock()
 
 	switch req.Method {
 	case "initialize":

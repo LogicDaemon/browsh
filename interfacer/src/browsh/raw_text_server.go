@@ -240,6 +240,7 @@ const (
 	RawTextModeDOM   RawTextMode = "DOM"
 	RawTextModeMCP   RawTextMode = "MCP"
 )
+
 func getRawTextMode(r *http.Request) string {
 	mode := RawTextModeHTML
 	if strings.Contains(r.Host, "text.") {
