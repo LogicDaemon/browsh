@@ -14,6 +14,10 @@ import (
 	"golang.org/x/sys/windows/registry"
 )
 
+func getFirefoxVersionString() string {
+	return getWindowsFirefoxVersionString()
+}
+
 func getFirefoxPath() string {
 	versionString := getWindowsFirefoxVersionString()
 	flavor := getFirefoxFlavor()

@@ -9,6 +9,12 @@ import (
 	"github.com/go-errors/errors"
 )
 
+func getFirefoxVersionString() string {
+	output := Shell("firefox --version")
+	pieces := strings.Split(output, " ")
+	return pieces[len(pieces)-1]
+}
+
 func getFirefoxPath() string {
 	return Shell("which firefox")
 }

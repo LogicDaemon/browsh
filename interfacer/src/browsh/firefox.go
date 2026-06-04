@@ -65,6 +65,9 @@ func startHeadlessFirefox() {
 	firefoxPath := ensureFirefoxBinary()
 	ensureFirefoxVersion(firefoxPath)
 	args := []string{"--marionette"}
+	if firefoxVersionSupportsRemoteAllowSystemAccess() {
+		args = append(args, "-remote-allow-system-access")
+	}
 	if !viper.GetBool("firefox.with-gui") {
 		args = append(args, "--headless")
 	}
@@ -155,6 +158,13 @@ func versionOrdinal(version string) string {
 		vo[j]++
 	}
 	return string(vo)
+}
+
+func firefoxVersionSupportsRemoteAllowSystemAccess() bool {
+	versionString := getFirefoxVersionString()
+	pieces := strings.Split(versionString, " ")
+	version := pieces[0]
+	return versionOrdinal(version) >= versionOrdinal("151")
 }
 
 // Start Firefox via the `web-ext` CLI tool. This is for development and testing,
