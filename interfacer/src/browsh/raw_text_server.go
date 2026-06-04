@@ -74,6 +74,7 @@ func HTTPServerStart() {
 	slog.Info("Starting Browsh HTTP server")
 	bind := viper.GetString("http-server.bind")
 	port := viper.GetString("http-server.port")
+	slog.Info("Listening", "url", fmt.Sprintf("http://%s:%s/", bind, port), "mcp_url", fmt.Sprintf("http://%s:%s/mcp", bind, port))
 	serverMux := http.NewServeMux()
 	uncompressed := http.HandlerFunc(handleHTTPServerRequest)
 	serverMux.HandleFunc("/mcp", handleMCPRequest)
